@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BRAC Flow Tracker</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- React and ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <style>
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out forwards;
+        }
+        input[type="number"]::-webkit-inner-spin-button,
+        input[type="number"]::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        body { transition: background-color 0.5s, color 0.5s; }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-900">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo, useEffect } = React;
+
+        // --- SVG Icon Components (Removing external lucide dependency for stability) ---
+        
+        const MeditationIcon = ({ size = 22, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="12" cy="5" r="2" />
+                <path d="M12 7v6" />
+                <path d="M7 13.5c1-1.5 3-2.5 5-2.5s4 1 5 2.5" />
+                <path d="M5 20c1.5-1 3.5-2 7-2s5.5 1 7 2" />
+                <path d="M12 18v-5" />
+                <path d="M12 13l-4 3" />
+                <path d="M12 13l4 3" />
+                <path d="M4 21h16" opacity="0.4" />
+            </svg>
+        );
+
+        const ZapIcon = ({ size = 22, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+            </svg>
+        );
+
+        const ClockIcon = ({ size = 16, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+            </svg>
+        );
+
+        const SettingsIcon = ({ size = 20, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+        );
+
+        const ChevronIcon = ({ direction, size = 20, className = "" }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+                {direction === 'up' ? <polyline points="18 15 12 9 6 15" /> : <polyline points="6 9 12 15 18 9" />}
+            </svg>
+        );
+
+        const LayoutIcon = ({ size = 20 }) => (
+            <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+            </svg>
+        );
+
+        const App = () => {
+            const [wakeTime, setWakeTime] = useState("07:00");
+            const [activeLength, setActiveLength] = useState(90);
+            const [restLength, setRestLength] = useState(20);
+            const [showSettings, setShowSettings] = useState(true);
+            const [isDarkMode, setIsDarkMode] = useState(false);
+
+            const cycles = useMemo(() => {
+                const results = [];
+                const [hours, minutes] = wakeTime.split(':').map(Number);
+                let currentMoment = new Date();
+                currentMoment.setHours(hours, minutes, 0, 0);
+                const endTime = new Date(currentMoment.getTime() + 24 * 60 * 60 * 1000);
+
+                while (currentMoment < endTime) {
+                    const activeStart = new Date(currentMoment);
+                    currentMoment.setMinutes(currentMoment.getMinutes() + activeLength);
+                    const activeEnd = new Date(currentMoment);
+                    results.push({
+                        type: 'active',
+                        start: activeStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        end: activeEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        duration: activeLength,
+                        id: `active-${activeStart.getTime()}`
+                    });
+
+                    const restStart = new Date(currentMoment);
+                    currentMoment.setMinutes(currentMoment.getMinutes() + restLength);
+                    const restEnd = new Date(currentMoment);
+                    results.push({
+                        type: 'rest',
+                        start: restStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        end: restEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                        duration: restLength,
+                        id: `rest-${restStart.getTime()}`
+                    });
+                }
+                return results;
+            }, [wakeTime, activeLength, restLength]);
+
+            const adjustValue = (setter, val, step) => {
+                setter(prev => Math.max(1, prev + (val * step)));
+            };
+
+            const ArrowButton = ({ direction, onClick }) => (
+                <button 
+                    onClick={onClick} 
+                    className={`p-1.5 rounded-lg transition-all duration-200 shadow-sm border
+                        ${isDarkMode 
+                            ? 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-indigo-600 hover:text-white hover:border-indigo-500' 
+                            : 'bg-slate-200 border-slate-300 text-slate-700 hover:bg-indigo-600 hover:text-white hover:border-indigo-500'
+                        }`}
+                >
+                    <ChevronIcon direction={direction} size={20} />
+                </button>
+            );
+
+            return (
+                <div className={`min-h-screen transition-colors duration-500 ${isDarkMode ? 'bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+                    <nav className={`sticky top-0 z-50 backdrop-blur-md border-b ${isDarkMode ? 'border-slate-800 bg-slate-950/80' : 'border-slate-200 bg-white/80'} px-6 py-4 flex justify-between items-center`}>
+                        <div className="flex items-center gap-2">
+                            <div className="bg-indigo-600 p-2 rounded-lg text-white">
+                                <LayoutIcon size={20} />
+                            </div>
+                            <h1 className="font-bold text-xl tracking-tight">BRAC <span className="text-indigo-600">Flow</span></h1>
+                        </div>
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => setIsDarkMode(!isDarkMode)} className={`p-2 rounded-full transition-colors ${isDarkMode ? 'hover:bg-slate-800' : 'hover:bg-slate-100'}`}>
+                                {isDarkMode ? <span className="text-xl">☀️</span> : <span className="text-xl">🌙</span>}
+                            </button>
+                            <button onClick={() => setShowSettings(!showSettings)} className="lg:hidden p-2 rounded-full hover:bg-slate-100">
+                                <SettingsIcon size={20} />
+                            </button>
+                        </div>
+                    </nav>
+
+                    <main className="max-w-7xl mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
+                        <aside className={`lg:w-80 space-y-6 transition-all duration-300 ${showSettings ? 'block' : 'hidden lg:block'}`}>
+                            <div className={`p-6 rounded-2xl border ${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200'} shadow-sm`}>
+                                <div className="flex items-center gap-2 mb-6">
+                                    <SettingsIcon size={20} className="text-indigo-500" />
+                                    <h2 className="font-semibold text-lg">Configuration</h2>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Wake Up Time</label>
+                                        <div className="relative">
+                                            <div className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                                <ClockIcon size={16} />
+                                            </div>
+                                            <input type="time" value={wakeTime} onChange={(e) => setWakeTime(e.target.value)} className={`w-full pl-10 pr-4 py-3 rounded-xl border appearance-none outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Active Phase (min)</label>
+                                        <div className="flex items-center gap-3">
+                                            <input type="number" value={activeLength} onChange={(e) => setActiveLength(parseInt(e.target.value) || 0)} className={`flex-1 px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
+                                            <div className="flex flex-col gap-1.5">
+                                                <ArrowButton direction="up" onClick={() => adjustValue(setActiveLength, 1, 5)} />
+                                                <ArrowButton direction="down" onClick={() => adjustValue(setActiveLength, -1, 5)} />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Rest Phase (min)</label>
+                                        <div className="flex items-center gap-3">
+                                            <input type="number" value={restLength} onChange={(e) => setRestLength(parseInt(e.target.value) || 0)} className={`flex-1 px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
+                                            <div className="flex flex-col gap-1.5">
+                                                <ArrowButton direction="up" onClick={() => adjustValue(setRestLength, 1, 5)} />
+                                                <ArrowButton direction="down" onClick={() => adjustValue(setRestLength, -1, 5)} />
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </aside>
+
+                        <section className="flex-1">
+                            <div className="flex items-center justify-between mb-6">
+                                <h2 className="text-2xl font-bold">Today's Energy Timeline</h2>
+                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-400' : 'bg-slate-100 border-slate-200 text-slate-500'}`}>24-Hour Cycle</span>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
+                                {cycles.map((cycle, index) => (
+                                    <div key={cycle.id} className={`group relative flex items-center p-4 rounded-2xl border transition-all duration-300 animate-slide-in ${cycle.type === 'active' ? (isDarkMode ? 'bg-indigo-900/10 border-indigo-500/30 hover:bg-indigo-900/20' : 'bg-indigo-50 border-indigo-200 hover:shadow-md hover:shadow-indigo-100') : (isDarkMode ? 'bg-amber-900/10 border-amber-500/30 hover:bg-amber-900/20' : 'bg-amber-50 border-amber-200 hover:shadow-md hover:shadow-amber-100')}`} style={{animationDelay: `${Math.min(index * 0.05, 0.5)}s`}}>
+                                        <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 mr-4 ${cycle.type === 'active' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'}`}>
+                                            {cycle.type === 'active' ? <ZapIcon /> : <MeditationIcon />}
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <span className={`text-xs font-bold uppercase tracking-widest ${cycle.type === 'active' ? 'text-indigo-600' : 'text-amber-600'}`}>
+                                                    {cycle.type === 'active' ? 'Deep Work Phase' : 'Strategic Rest'}
+                                                </span>
+                                                <span className="text-xs font-medium opacity-60">{cycle.duration} mins</span>
+                                            </div>
+                                            <div className="flex items-baseline gap-2">
+                                                <span className="text-xl font-bold tabular-nums">{cycle.start}</span>
+                                                <span className="text-slate-400 text-sm">to</span>
+                                                <span className="text-xl font-bold tabular-nums">{cycle.end}</span>
+                                            </div>
+                                        </div>
+                                        <div className={`absolute bottom-0 left-0 h-1 rounded-b-2xl opacity-20 transition-all group-hover:opacity-40 w-full ${cycle.type === 'active' ? 'bg-indigo-600' : 'bg-amber-600'}`}></div>
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
