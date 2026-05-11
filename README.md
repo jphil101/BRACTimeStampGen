@@ -1,39 +1,18 @@
-BRAC Flow Tracker
+# BRAC Flow Tracker
 
-A minimalist productivity tool to align work schedules with natural energy cycles.
-🧠 What is BRAC?
+A React-based web tool designed to track your Basic Rest-Activity Cycle (BRAC) and focus sessions.
 
-The Basic Rest-Activity Cycle (BRAC) is an ultradian rhythm that governs alertness levels.
+## Background
+The Basic Rest-Activity Cycle (BRAC) is a physiological arousal mechanism in humans. This tool helps users track these cycles to optimize their productivity and rest periods by logging precise timestamps.
 
-    The 90-Minute Pulse: The body naturally cycles through ~90 minutes of high-frequency brain activity.
+## What it does
+- **Input**: User interactions (button clicks) to log start/end times of focus or rest sessions.
+- **Output**: A visualized timeline and list of sessions with duration calculations and progress tracking.
 
-    The Recovery Gap: These peaks are followed by ~20-minute periods of lower-frequency activity for restoration.
+## How to use it
+1.  Open `index.html` in any modern web browser.
+2.  Use the interface to start and stop your activity tracking.
+3.  View your flow history and daily stats directly on the dashboard.
 
-    Daily Flow: Unlike 24-hour circadian rhythms, BRAC repeats throughout the day and night.
-
-
-✨ Key Features
-
-    Automated Timeline: Generates a 24-hour schedule based on your wake-up time.
-
-    Visual Distinction: Clearly separates "Deep Work" phases from "Strategic Rest."
-
-    Responsive UI: Dark/Light mode support with a mobile-friendly layout.
-
-    Portable: Single-file application; no installation or backend required.
-
-🛠️ Technical Stack
-Component	Technology
-Framework	React 18 (via Unpkg)
-Styling	Tailwind CSS
-Runtime	Babel Standalone
-Icons	Custom Inline SVGs
-
-
-🚀 Usage
-
-    Save the index.html file to your computer.
-
-    Open it in any modern web browser.
-
-    Set your wake-up time and phase lengths to view your daily flow.
+> [!NOTE]
+> This project has a clear scope for being hosted as a standalone web application. **Website is in development.**
