@@ -110,42 +110,75 @@
                 localStorage.setItem('brac_showSettings', showSettings);
             }, [wakeTime, activeLength, restLength, isDarkMode, showSettings]);
 
+            // Inputs may be temporarily empty/invalid while typing; never let a phase be < 1 min
+            // (0 or negative lengths made the loop below run forever and froze the page).
+            const effActive = Math.max(1, Number(activeLength) || 0);
+            const effRest = Math.max(1, Number(restLength) || 0);
+
+            // Tick every 30s so the "now" highlight stays current
+            const [now, setNow] = useState(() => Date.now());
+            useEffect(() => {
+                const id = setInterval(() => setNow(Date.now()), 30000);
+                return () => clearInterval(id);
+            }, []);
+
+            // Day boundary: if it's before today's wake time we're still in yesterday's cycle
+            const dayKey = useMemo(() => {
+                const [h, m] = (wakeTime || '07:00').split(':').map(Number);
+                const base = new Date(now);
+                base.setHours(h || 0, m || 0, 0, 0);
+                if (base.getTime() > now) base.setDate(base.getDate() - 1);
+                return base.getTime();
+            }, [wakeTime, now]);
+
             const cycles = useMemo(() => {
                 const results = [];
-                const [hours, minutes] = wakeTime.split(':').map(Number);
-                let currentMoment = new Date();
-                currentMoment.setHours(hours, minutes, 0, 0);
+                let currentMoment = new Date(dayKey);
                 const endTime = new Date(currentMoment.getTime() + 24 * 60 * 60 * 1000);
 
                 while (currentMoment < endTime) {
                     const activeStart = new Date(currentMoment);
-                    currentMoment.setMinutes(currentMoment.getMinutes() + activeLength);
+                    currentMoment.setMinutes(currentMoment.getMinutes() + effActive);
                     const activeEnd = new Date(currentMoment);
                     results.push({
                         type: 'active',
                         start: activeStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         end: activeEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        duration: activeLength,
+                        duration: effActive,
+                        startMs: activeStart.getTime(),
+                        endMs: activeEnd.getTime(),
                         id: `active-${activeStart.getTime()}`
                     });
 
                     const restStart = new Date(currentMoment);
-                    currentMoment.setMinutes(currentMoment.getMinutes() + restLength);
+                    currentMoment.setMinutes(currentMoment.getMinutes() + effRest);
                     const restEnd = new Date(currentMoment);
                     results.push({
                         type: 'rest',
                         start: restStart.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                         end: restEnd.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                        duration: restLength,
+                        duration: effRest,
+                        startMs: restStart.getTime(),
+                        endMs: restEnd.getTime(),
                         id: `rest-${restStart.getTime()}`
                     });
                 }
                 return results;
-            }, [wakeTime, activeLength, restLength]);
+            }, [dayKey, effActive, effRest]);
+
+            const currentId = cycles.find(c => now >= c.startMs && now < c.endMs)?.id;
+
+            // Bring the current phase into view on load
+            useEffect(() => {
+                const el = currentId && document.getElementById(currentId);
+                if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // eslint-disable-next-line
+            }, [currentId === undefined]);
 
             const adjustValue = (setter, val, step) => {
-                setter(prev => Math.max(1, prev + (val * step)));
+                setter(prev => Math.max(1, (Number(prev) || 0) + (val * step)));
             };
+            const parseLength = (value) => value === '' ? '' : Math.max(1, parseInt(value, 10) || 1);
 
             const ArrowButton = ({ direction, onClick }) => (
                 <button 
@@ -210,7 +243,7 @@
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Active Phase (min)</label>
                                         <div className="flex items-center gap-3">
-                                            <input type="number" value={activeLength} onChange={(e) => setActiveLength(parseInt(e.target.value) || 0)} className={`flex-1 px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
+                                            <input type="number" value={activeLength} min="1" onChange={(e) => setActiveLength(parseLength(e.target.value))} onBlur={() => setActiveLength(effActive)} className={`flex-1 px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
                                             <div className="flex flex-col gap-1.5">
                                                 <ArrowButton direction="up" onClick={() => adjustValue(setActiveLength, 1, 5)} />
                                                 <ArrowButton direction="down" onClick={() => adjustValue(setActiveLength, -1, 5)} />
@@ -221,7 +254,7 @@
                                     <div>
                                         <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Rest Phase (min)</label>
                                         <div className="flex items-center gap-3">
-                                            <input type="number" value={restLength} onChange={(e) => setRestLength(parseInt(e.target.value) || 0)} className={`flex-1 px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
+                                            <input type="number" value={restLength} min="1" onChange={(e) => setRestLength(parseLength(e.target.value))} onBlur={() => setRestLength(effRest)} className={`flex-1 px-4 py-3 rounded-xl border outline-none focus:ring-2 focus:ring-indigo-500/20 ${isDarkMode ? 'bg-slate-800 border-slate-700 focus:border-indigo-500' : 'bg-slate-50 border-slate-200 focus:border-indigo-500'}`} />
                                             <div className="flex flex-col gap-1.5">
                                                 <ArrowButton direction="up" onClick={() => adjustValue(setRestLength, 1, 5)} />
                                                 <ArrowButton direction="down" onClick={() => adjustValue(setRestLength, -1, 5)} />
@@ -243,8 +276,12 @@
                             </div>
 
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2 gap-4">
-                                {cycles.map((cycle, index) => (
-                                    <div key={cycle.id} className={`group relative flex items-center p-4 rounded-2xl border transition-all duration-300 animate-slide-in ${cycle.type === 'active' ? (isDarkMode ? 'bg-indigo-900/10 border-indigo-500/30 hover:bg-indigo-900/20' : 'bg-indigo-50 border-indigo-200 hover:shadow-md hover:shadow-indigo-100') : (isDarkMode ? 'bg-amber-900/10 border-amber-500/30 hover:bg-amber-900/20' : 'bg-amber-50 border-amber-200 hover:shadow-md hover:shadow-amber-100')}`} style={{animationDelay: `${Math.min(index * 0.05, 0.5)}s`}}>
+                                {cycles.map((cycle, index) => {
+                                    const isCurrent = cycle.id === currentId;
+                                    const isPast = now >= cycle.endMs;
+                                    const minsLeft = Math.ceil((cycle.endMs - now) / 60000);
+                                    return (
+                                    <div key={cycle.id} id={cycle.id} className={`group relative flex items-center p-4 rounded-2xl border transition-all duration-300 animate-slide-in ${isCurrent ? 'ring-2 ring-offset-2 ' + (cycle.type === 'active' ? 'ring-indigo-500' : 'ring-amber-500') + (isDarkMode ? ' ring-offset-slate-950' : ' ring-offset-slate-50') : ''} ${isPast ? 'opacity-50' : ''} ${cycle.type === 'active' ? (isDarkMode ? 'bg-indigo-900/10 border-indigo-500/30 hover:bg-indigo-900/20' : 'bg-indigo-50 border-indigo-200 hover:shadow-md hover:shadow-indigo-100') : (isDarkMode ? 'bg-amber-900/10 border-amber-500/30 hover:bg-amber-900/20' : 'bg-amber-50 border-amber-200 hover:shadow-md hover:shadow-amber-100')}`} style={{animationDelay: `${Math.min(index * 0.05, 0.5)}s`}}>
                                         <div className={`w-12 h-12 rounded-full flex items-center justify-center shrink-0 mr-4 ${cycle.type === 'active' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/20' : 'bg-amber-500 text-white shadow-lg shadow-amber-500/20'}`}>
                                             {cycle.type === 'active' ? <ZapIcon /> : <MeditationIcon />}
                                         </div>
@@ -253,7 +290,9 @@
                                                 <span className={`text-xs font-bold uppercase tracking-widest ${cycle.type === 'active' ? 'text-indigo-600' : 'text-amber-600'}`}>
                                                     {cycle.type === 'active' ? 'Deep Work Phase' : 'Strategic Rest'}
                                                 </span>
-                                                <span className="text-xs font-medium opacity-60">{cycle.duration} mins</span>
+                                                {isCurrent
+                                                    ? <span className={`text-xs font-bold px-2 py-0.5 rounded-full text-white ${cycle.type === 'active' ? 'bg-indigo-600' : 'bg-amber-500'}`}>Now · {minsLeft} min left</span>
+                                                    : <span className="text-xs font-medium opacity-60">{cycle.duration} mins</span>}
                                             </div>
                                             <div className="flex items-baseline gap-2">
                                                 <span className="text-xl font-bold tabular-nums">{cycle.start}</span>
@@ -262,8 +301,12 @@
                                             </div>
                                         </div>
                                         <div className={`absolute bottom-0 left-0 h-1 rounded-b-2xl opacity-20 transition-all group-hover:opacity-40 w-full ${cycle.type === 'active' ? 'bg-indigo-600' : 'bg-amber-600'}`}></div>
+                                        {isCurrent && (
+                                            <div className={`absolute bottom-0 left-0 h-1 rounded-bl-2xl ${cycle.type === 'active' ? 'bg-indigo-600' : 'bg-amber-600'}`} style={{ width: `${Math.min(100, Math.max(0, (now - cycle.startMs) / (cycle.endMs - cycle.startMs) * 100))}%` }}></div>
+                                        )}
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </section>
                     </main>
